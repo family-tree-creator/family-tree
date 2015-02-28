@@ -21,7 +21,26 @@ addChild c Empty = singleTree c
 addChild c (Node p list) 
 	| c == p = singleTree p
 	| list == [] = Node p (Node c[]:[]) 
-	| c == (list:_) = Node p list
+	| c `famElem` list = Node p list
+	| otherwise = Node p (list ++ [Node c[]])
+
+--add child version 2
+addChild' :: (Eq a) => FamTree a -> FamTree a -> FamTree a
+addChild' (Node c cList) Empty = (Node c cList)
+addChild' (Node c cList) (Node p list) 
+	| c == p = (Node p list)
+	| list == [] = Node p (Node c cList:[])
+	| c `famElem` list = Node p list   				--erases cList
+	| otherwise = Node p (list ++ [Node c cList])
+
+--checks if element is part of a family tree
+famElem :: (Eq a) => a -> [FamTree a] -> Bool
+famElem a [] = False
+famElem a (Node x(xChild):xs) 
+	| a == x = True
+	| xChild /= [] = a `famElem` xChild
+	| otherwise = a `famElem` xs 
+
 
 --should Individual be type instead? 
 --Individual :: [(String,String,[Int],[Int],Int)]
