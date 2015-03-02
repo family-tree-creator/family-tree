@@ -73,12 +73,35 @@ printIndividual :: Individual -> String
 printIndividual (Individual {firstName = f,lastName = l, birth = b, death = d, age = a}) = f ++
      " , " ++ l ++ ". Birth date: " ++ show b ++ " Death date: " ++ show d ++" Age: " ++ show a 
  
---prints curr or root of tree. Not useful yet
+--prints curr or root of tree
 printRoot :: FamTree a -> FamTree a 
-printRoot Empty = Empty
+printRoot Empty = error "need tree to print root"
 printRoot (Node x list) = Node x []
 
+--prints just name of root 
+printRoot' :: (Show a) => FamTree a -> String 
+printRoot' Empty = error "need tree to print root"
+printRoot' (Node x list) = show x
+
+--prints individual in found in tree
+-- still need to add return value for when not found/ bottom out
+printFind :: (Eq a) => a -> FamTree a -> FamTree a
+printFind a Empty = error "need tree to search"
+printFind a (Node r (x:xs))
+	| a == r = Node a []
+	| Node a [] == x = Node a [] 
+	| a `famElem` xs = singleTree a
+	| otherwise = printFind a x  
+
+--number of nodes in tree
+-- doesn't do through lists inside list/ doesn't work yet
+famTreeSize :: (Eq a) => FamTree a -> Int
+famTreeSize Empty = 0
+famTreeSize (Node x list) 
+	| list == [] = 1
+	| otherwise = 1 + length list 
+	
 --test variables
 a = Node "Ann" []
 b = Individual "Ann" "Whal" [01,24,1980] [04,14,2010] 30
-sample = Node "Will" [Node "Willow" [], Node "Jaden" []]
+sample = Node "Will" [Node "Willow" [], Node "Jaden" [Node "Child" []]]
