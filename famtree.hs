@@ -4,7 +4,25 @@
 
 --tree in three forms: empty, single individual, married w/ children
 data FamTree a = Empty | Node a [FamTree a] 
-  deriving (Show, Read, Eq)
+  deriving (Read, Eq)
+
+instance Show (FamTree a) where
+	show (Empty) = "Empty Tree"
+--	show (Node a (list)) = a
+	
+--datatype to hold information about individual
+data Individual = Individual { fName :: String
+						     , lName :: String
+						     , gender :: Char
+						     , birth :: [Int]
+						     , death :: [Int]
+						     , age :: Int
+						   } deriving (Read, Eq)
+
+--displays Individual's information in a easier to read format
+instance Show Individual where
+	show (Individual f l g b d a) = f ++ ", " ++ l ++ ". Gender: " ++ show g ++ ". Born: " ++ show b ++ " Died: " ++ show d ++ ". Age: " ++ show a ++ "."
+	 
 
 --tree for single individual
 singleTree :: a -> FamTree a
@@ -16,7 +34,8 @@ singleTree a = Node a []
 --		} deriving (Show, Read, Eq) 
 
 -- add child to parent: (delete?)
--- child added can just be String
+-- child added can just be String. 
+-- Works for Individual, but then added children cannot have children of their own
 -- >addChild "child" (Node "parent" []) 
 -- | Node "parent" [Node "child []]
 addChild :: (Eq a) => a -> FamTree a -> FamTree a
@@ -36,9 +55,18 @@ addChild' (Node c cList) (Node p list)
 	| list == [] = Node p (Node c cList:[])
 	| c `famElem` list = Node p list   				--erases cList
 	| otherwise = Node p (list ++ [Node c cList])
+	
+--add version 3 for accepting Node w/ Individual
+addChild'' :: FamTree Individual -> FamTree Individual -> FamTree Individual
+addChild'' (Node (Individual {fName = f,lName = l, gender = g, birth = b, death = d, age = a}) iList) Empty = Empty
+addChild'' (Node (Individual {fName = f,lName = l, gender = g, birth = b, death = d, age = a}) iList) (Node (Individual {fName = pf,lName = pl, gender= pg, birth = pb, death = pd, age = pa}) pList)
+	| f == pf && l == pl = (Node (Individual {fName = pf,lName = pl, gender = pg, birth = pb, death = pd, age = pa}) pList) 
+	| pList == [] = (Node (Individual {fName = pf,lName = pl, gender = pg, birth = pb, death = pd, age = pa}) (Node (Individual {fName = f,lName = l, birth = b, gender = g, death = d, age = a}) iList:[]) )
+	| (Individual {fName = f,lName = l, gender = g,  birth = b, death = d, age = a}) `famElem` pList = (Node (Individual {fName = pf,lName = pl, gender = pg, birth = pb, death = pd, age = pa}) pList)
+	| otherwise = Node (Individual {fName = pf,lName = pl, gender = pg, birth = pb, death = pd, age = pa}) (pList ++ [Node (Individual {fName = f,lName = l, gender = g, birth = b, death = d, age = a}) iList])
 
 --add parent to child. 
--- parent added just String (delete?)
+-- parent added can be Individual, or String
 addParent :: (Eq a) => a -> FamTree a -> FamTree a
 addParent p Empty = singleTree p
 addParent p (Node c cList) 
@@ -61,18 +89,7 @@ famElem a (Node x(xChild):xs)
 	| xChild /= [] = a `famElem` xChild
 	| otherwise = a `famElem` xs 
 
---datatype to hold information about individual
-data Individual = Individual { firstName :: String
-						     , lastName :: String
-						     , birth :: [Int]
-						     , death :: [Int]
-						     , age :: Int
-						   } deriving (Show, Read, Eq)
-						   
-printIndividual :: Individual -> String
-printIndividual (Individual {firstName = f,lastName = l, birth = b, death = d, age = a}) = f ++
-     " , " ++ l ++ ". Birth date: " ++ show b ++ " Death date: " ++ show d ++" Age: " ++ show a 
- 
+
 --prints curr or root of tree
 printRoot :: FamTree a -> FamTree a 
 printRoot Empty = error "need tree to print root"
@@ -83,7 +100,7 @@ printRoot' :: (Show a) => FamTree a -> String
 printRoot' Empty = error "need tree to print root"
 printRoot' (Node x list) = show x
 
---prints individual in found in tree
+--prints Node if found in tree
 -- still need to add return value for when not found/ bottom out
 printFind :: (Eq a) => a -> FamTree a -> FamTree a
 printFind a Empty = error "need tree to search"
@@ -92,6 +109,12 @@ printFind a (Node r (x:xs))
 	| Node a [] == x = Node a [] 
 	| a `famElem` xs = singleTree a
 	| otherwise = printFind a x  
+
+--version 2. search with first and last name, prints Node if found
+printFind' :: String -> String -> FamTree Individual -> FamTree Individual
+printFind' fst lst Empty = error "need tree to search"
+printFind' fst lst (Node (Individual {fName = f,lName = l, gender = g, birth = b, death = d, age = a}) (x:xs))
+	| f == fst = Node (Individual {fName = f,lName = l, gender = g, birth = b, death = d, age = a}) []
 
 --number of nodes in tree
 -- doesn't do through lists inside list/ doesn't work yet
@@ -103,5 +126,7 @@ famTreeSize (Node x list)
 	
 --test variables
 a = Node "Ann" []
-b = Individual "Ann" "Whal" [01,24,1980] [04,14,2010] 30
+b = Individual "Ann" "Kale" 'f' [1,10,1970] [1,10,2000] 30
+c = Individual "Ann" "Whale" 'f' [2,20,1980] [5,20,1981] 1
+d = Individual "person" "Whal" 'm' [0,0,0000] [1,1,1111] 70
 sample = Node "Will" [Node "Willow" [], Node "Jaden" [Node "Child" []]]
