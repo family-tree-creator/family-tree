@@ -1,13 +1,33 @@
 --
--- Famtree.hs
+-- famtree.hs
 --
+
+module Famtree
+( FamTree
+, Individual
+, indName
+, indName' 
+, drawTree
+, singleTree 
+, addChild 
+, addChild' 
+, addChild''
+, addParent
+, addParent' 
+, famElem
+, printRoot
+, printRoot' 
+, printFind
+, famTreeSize
+, childSize
+) where  
 
 --tree in three forms: empty, single individual, married w/ children
 data FamTree a = Empty | Node a [FamTree a] 
-  deriving (Read, Eq)
+  deriving (Show, Read, Eq)
 
-instance Show (FamTree a) where
-	show (Empty) = "Empty Tree"
+--instance Show (FamTree a) where
+--	show (Empty) = "Empty Tree"
 --	show (Node a (list)) = a
 	
 --datatype to hold information about individual
@@ -22,18 +42,31 @@ data Individual = Individual { fName :: String
 --displays Individual's information in a easier to read format
 instance Show Individual where
 	show (Individual f l g b d a) = f ++ ", " ++ l ++ ". Gender: " ++ show g ++ ". Born: " ++ show b ++ " Died: " ++ show d ++ ". Age: " ++ show a ++ "."
+
+--function for displaying only first and last name
+indName:: Individual -> String
+indName (Individual {fName = f,lName = l, gender = g, birth = b, death = d, age = a}) = f ++ ", " ++ l
+
+--version 2 indName, gets names from Node Individual
+indName' :: FamTree Individual -> String
+indName' Empty = ""
+indName' (Node (Individual {fName = f,lName = l, gender = g, birth = b, death = d, age = a}) list) = f ++ ", " ++ l
 	 
+--draw tree
+-- need more time to implement, can be scrapped for now
+drawTree :: FamTree Individual -> IO()
+drawTree Empty = error "can't draw Empty Tree"
+drawTree (Node x list) = putStrLn ("    " ++ indName x  ++ "\n" ++
+ " ------------------------" ++ "\n" ++
+ "" ++ "/" ++ "          " ++ "|" ++ "             " ++ "\\" ++ "\n" ++
+ indName'(head list) )
 
 --tree for single individual
 singleTree :: a -> FamTree a
 singleTree a = Node a []
 
---data FamTree a = Empty | Node {
---		root :: a,
---		children :: FamTree a 
---		} deriving (Show, Read, Eq) 
 
--- add child to parent: (delete?)
+-- add child to parent: 
 -- child added can just be String. 
 -- Works for Individual, but then added children cannot have children of their own
 -- >addChild "child" (Node "parent" []) 
@@ -96,37 +129,49 @@ printRoot Empty = error "need tree to print root"
 printRoot (Node x list) = Node x []
 
 --prints just name of root 
-printRoot' :: (Show a) => FamTree a -> String 
+printRoot' :: (Show a) => FamTree a -> IO() 
 printRoot' Empty = error "need tree to print root"
-printRoot' (Node x list) = show x
+printRoot' (Node x list) = putStrLn(show x)
 
---prints Node if found in tree
--- still need to add return value for when not found/ bottom out
-printFind :: (Eq a) => a -> FamTree a -> FamTree a
-printFind a Empty = error "need tree to search"
-printFind a (Node r (x:xs))
-	| a == r = Node a []
-	| Node a [] == x = Node a [] 
-	| a `famElem` xs = singleTree a
-	| otherwise = printFind a x  
+--prints Maybe Node if found in tree
+printFind :: (Eq a) => a -> FamTree a -> Maybe (FamTree a)
+printFind a Empty = Nothing
+printFind a (Node r list)
+    | a == r = Just (Node a [])
+    | a `famElem` list = Just (singleTree a)
+    | otherwise = printFind a x
+    where x | list == [] = Empty | otherwise = head list
 
---version 2. search with first and last name, prints Node if found
-printFind' :: String -> String -> FamTree Individual -> FamTree Individual
-printFind' fst lst Empty = error "need tree to search"
-printFind' fst lst (Node (Individual {fName = f,lName = l, gender = g, birth = b, death = d, age = a}) (x:xs))
-	| f == fst = Node (Individual {fName = f,lName = l, gender = g, birth = b, death = d, age = a}) []
+--navigate through tree
+changeRoot :: (Eq a) => FamTree a -> FamTree a -> FamTree a
+changeRoot (Node a aList) Empty = error "need tree to navigate" 
+--changeRoot (Node a aList) (Node r list) = y
+ --  where x = printFind a (Node r list) 
+ --        y 
+ --        | x == Just (Node a []) = (Node a aList)
+ --        | otherwise = Nothing
+
+
+-- number of children of one parent	
+childSize :: (Eq a) => FamTree a -> Int
+childSize Empty = error "cannot calculate children for Empty tree"
+childSize (Node x list) 
+	| list == [] = 0
+	| otherwise = length list
 
 --number of nodes in tree
--- doesn't do through lists inside list/ doesn't work yet
+-- doesn't go through lists inside list/ doesn't work yet
 famTreeSize :: (Eq a) => FamTree a -> Int
 famTreeSize Empty = 0
 famTreeSize (Node x list) 
 	| list == [] = 1
-	| otherwise = 1 + length list 
+	| otherwise = length list + famTreeSize y  -- + every other child in list! 
+	where y | list == [] = Empty | otherwise = head list
+
 	
 --test variables
 a = Node "Ann" []
-b = Individual "Ann" "Kale" 'f' [1,10,1970] [1,10,2000] 30
+b = singleTree (Individual "Ann" "Kale" 'f' [1,10,1970] [1,10,2000] 30)
 c = Individual "Ann" "Whale" 'f' [2,20,1980] [5,20,1981] 1
 d = Individual "person" "Whal" 'm' [0,0,0000] [1,1,1111] 70
-sample = Node "Will" [Node "Willow" [], Node "Jaden" [Node "Child" []]]
+sample = Node "Will" [Node "Willow" [], Node "Jaden" [Node "Child" [Node "Dude" []]]]
