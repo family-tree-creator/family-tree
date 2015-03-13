@@ -2,176 +2,181 @@
 -- famtree.hs
 --
 
-module Famtree
-( FamTree
-, Individual
-, indName
-, indName' 
-, drawTree
-, singleTree 
-, addChild 
-, addChild' 
-, addChild''
-, addParent
-, addParent' 
-, famElem
-, printRoot
-, printRoot' 
-, printFind
-, famTreeSize
-, childSize
-) where  
+import Data.Maybe
+import Data.Char
+
+type First  = String
+type Last   = String
+type Gender = Char
+type Birth  = (Int, Int, Int)
+type Death  = (Int, Int, Int)
+type Age    = Int
+
+-- an Individual 
+type Name = (String, String)
+data Info = Person Name Gender Birth Death Age deriving (Show, Read, Eq)
+
 
 --tree in three forms: empty, single individual, married w/ children
-data FamTree a = Empty | Node a [FamTree a] 
-  deriving (Show, Read, Eq)
+data FamTree = Real Info [FamTree]
+             | Temp Name --[FamTree] add if needed
+             | Hold Name [Name] --FTCrumb? or list of names?
+  deriving (Read, Eq)
 
---instance Show (FamTree a) where
---	show (Empty) = "Empty Tree"
---	show (Node a (list)) = a
-	
---datatype to hold information about individual
-data Individual = Individual { fName :: String
-						     , lName :: String
-						     , gender :: Char
-						     , birth :: [Int]
-						     , death :: [Int]
-						     , age :: Int
-						   } deriving (Read, Eq)
+instance Show FamTree where
+    show (Real (Person (first, last) gen (bm,bd,by) (dm,dd,dy) age) _) = first ++ " " ++ last ++ " " ++ show gen ++ " age: " ++ show age
+    show (Temp (first, last)) = first ++ " " ++ last
+    show (Hold (first, last) _) = first ++ " " ++ last
 
---displays Individual's information in a easier to read format
-instance Show Individual where
-	show (Individual f l g b d a) = f ++ ", " ++ l ++ ". Gender: " ++ show g ++ ". Born: " ++ show b ++ " Died: " ++ show d ++ ". Age: " ++ show a ++ "."
+-- left: previous nodes info, right: path back up
+data FTCrumb = FTCrumb Info [FamTree] [FamTree]-- deriving (Show)
 
---function for displaying only first and last name
-indName:: Individual -> String
-indName (Individual {fName = f,lName = l, gender = g, birth = b, death = d, age = a}) = f ++ ", " ++ l
+type FTZipper = (FamTree, [FTCrumb])
 
---version 2 indName, gets names from Node Individual
-indName' :: FamTree Individual -> String
-indName' Empty = ""
-indName' (Node (Individual {fName = f,lName = l, gender = g, birth = b, death = d, age = a}) list) = f ++ ", " ++ l
-	 
---draw tree
--- need more time to implement, can be scrapped for now
-drawTree :: FamTree Individual -> IO()
-drawTree Empty = error "can't draw Empty Tree"
-drawTree (Node x list) = putStrLn ("    " ++ indName x  ++ "\n" ++
- " ------------------------" ++ "\n" ++
- "" ++ "/" ++ "          " ++ "|" ++ "             " ++ "\\" ++ "\n" ++
- indName'(head list) )
+--instance Show FTZipper where
+--    show (_, _) = "hello"
 
---tree for single individual
-singleTree :: a -> FamTree a
-singleTree a = Node a []
+ftUp :: FTZipper -> FTZipper
+ftUp (famTree, FTCrumb name prev crumb:crumbs) = (Real name (prev ++ [famTree] ++ crumb), crumbs)
+--ftUP Nothing = Nothing
 
+ftTo :: Name -> Maybe FTZipper -> Maybe (FTZipper)
+ftTo lname (Just (Real info links, crumbs)) =
+    let (ls, rs) = break (nameCheck lname) links
+    --in (head rs, FTCrumb info ls (tail rs):crumbs)
+    in if rs == []
+       then Nothing
+       else Just (head rs, FTCrumb info ls (tail rs):crumbs)
+ftTo _ _ = Nothing
 
--- add child to parent: 
--- child added can just be String. 
--- Works for Individual, but then added children cannot have children of their own
--- >addChild "child" (Node "parent" []) 
--- | Node "parent" [Node "child []]
-addChild :: (Eq a) => a -> FamTree a -> FamTree a
-addChild c Empty = singleTree c
-addChild c (Node p list) 
-	| c == p = singleTree p
-	| list == [] = Node p (Node c[]:[]) 
-	| c `famElem` list = Node p list
-	| otherwise = Node p (list ++ [Node c[]])
+nameCheck :: Name -> FamTree -> Bool
+nameCheck (first, last) (Real (Person (rFirst, rLast) _ _ _ _) _) = (first == rFirst) && (last == rLast)
+nameCheck (first, last) (Temp (tFirst, tLast)) = (first == tFirst) && (last == tLast)
+nameCheck (first, last) (Hold (hFirst, hLast) _) = (first == hFirst) && (last == hLast)
+--nameCheck _ _ = False
 
---add child version 2: child added is already a Node
--- >addChild' (Node "child" []) (Node "parent" [])
-addChild' :: (Eq a) => FamTree a -> FamTree a -> FamTree a
-addChild' (Node c cList) Empty = (Node c cList)
-addChild' (Node c cList) (Node p list) 
-	| c == p = (Node p list)
-	| list == [] = Node p (Node c cList:[])
-	| c `famElem` list = Node p list   				--erases cList
-	| otherwise = Node p (list ++ [Node c cList])
-	
---add version 3 for accepting Node w/ Individual
-addChild'' :: FamTree Individual -> FamTree Individual -> FamTree Individual
-addChild'' (Node (Individual {fName = f,lName = l, gender = g, birth = b, death = d, age = a}) iList) Empty = Empty
-addChild'' (Node (Individual {fName = f,lName = l, gender = g, birth = b, death = d, age = a}) iList) (Node (Individual {fName = pf,lName = pl, gender= pg, birth = pb, death = pd, age = pa}) pList)
-	| f == pf && l == pl = (Node (Individual {fName = pf,lName = pl, gender = pg, birth = pb, death = pd, age = pa}) pList) 
-	| pList == [] = (Node (Individual {fName = pf,lName = pl, gender = pg, birth = pb, death = pd, age = pa}) (Node (Individual {fName = f,lName = l, birth = b, gender = g, death = d, age = a}) iList:[]) )
-	| (Individual {fName = f,lName = l, gender = g,  birth = b, death = d, age = a}) `famElem` pList = (Node (Individual {fName = pf,lName = pl, gender = pg, birth = pb, death = pd, age = pa}) pList)
-	| otherwise = Node (Individual {fName = pf,lName = pl, gender = pg, birth = pb, death = pd, age = pa}) (pList ++ [Node (Individual {fName = f,lName = l, gender = g, birth = b, death = d, age = a}) iList])
+ftSearch :: Name -> Char -> Maybe FTZipper -> Maybe (FTZipper)
+ftSearch name pType p@(Just (person@(Real _ _), crumbs)) =
+    if (nameCheck name person)  && (checkType pType p)
+    then p
+    else ftSearchR name pType p --call another function
+ftSearch name pType p@(Just (person@(Temp _), _)) =
+    if (nameCheck name person) && (checkType pType p)
+    then p
+    else Nothing
+ftSearch name pType p@(Just (person@(Hold _ _), _)) =
+    if (nameCheck name person) && (checkType pType p)
+    then p
+    else Nothing
+ftSearch _ _ _ = Nothing
+--ftSearch (first, last) (Temp (tFirst, tLast), crumbs) =
 
---add parent to child. 
--- parent added can be Individual, or String
-addParent :: (Eq a) => a -> FamTree a -> FamTree a
-addParent p Empty = singleTree p
-addParent p (Node c cList) 
-	| p == c = (Node c cList)
-	| otherwise = Node p (Node c cList:[])
+ftSearchR :: Name -> Char -> Maybe FTZipper -> Maybe FTZipper --may be able to remove in later fix
+ftSearchR name pType p@(Just (Real info links, crumbs)) = --Just (p)
+    let r =  ftTo name p
+    in if (Data.Maybe.isJust r) && (checkType pType r)
+       then r
+       else ftSearchN name pType p 0-- map to links?
+ftSearchR name pType p@(Just (person@(Temp _), _)) = 
+    if (nameCheck name person) && (checkType pType p)
+    then p
+    else Nothing
+ftSearchR name pType p@(Just (person@(Hold _ _), _)) =
+    if (nameCheck name person) && (checkType pType p)
+    then p
+    else Nothing
+ftSearchR _ _ _ = Nothing
 
---add parent version 2: Node parent added to Node child
-addParent' :: (Eq a) => FamTree a -> FamTree a -> FamTree a
-addParent' (Node p list) Empty = (Node p list)
-addParent' (Node p list) (Node c cList)
-	| p == c = (Node c cList)
-	| otherwise = addChild' (Node c cList) (Node p list)
+ftSearchN :: Name -> Char -> Maybe FTZipper -> Int -> Maybe (FTZipper)
+ftSearchN name pType p@(Just (Real info links, crumbs)) place = 
+    let (ls, rs) = splitAt place links
+    in if rs == []
+       then Nothing
+       else let r = ftSearch name pType (Just (head rs, FTCrumb info ls (tail rs):crumbs))
+            in if (Data.Maybe.isJust r) && (checkType pType r)
+               then r
+               else ftSearchN name pType p (place + 1)
+ftSearchN name pType p@(Just (person@(Temp _), _)) _ =
+    if (nameCheck name person) && (checkType pType p)
+    then p
+    else Nothing
+ftSearchN name pType p@(Just (person@(Hold _ _), _)) _ =
+    if (nameCheck name person) && (checkType pType p)
+    then p
+    else Nothing
+ftSearchN _ _ _ _ = Nothing
 
+replaceTemp :: FamTree -> Maybe FTZipper -> Maybe FTZipper -- fix
+replaceTemp (Real info _) (Just (Real _ links, crumbs)) = Just (Real info links, crumbs)
+replaceTemp (Real info _) (Just (Temp _, crumbs)) = Just (Real info [], crumbs)
+replaceTemp _ Nothing = Nothing
 
---checks if element is part of a family tree
-famElem :: (Eq a) => a -> [FamTree a] -> Bool
-famElem a [] = False
-famElem a (Node x(xChild):xs) 
-	| a == x = True
-	| xChild /= [] = a `famElem` xChild
-	| otherwise = a `famElem` xs 
+insertPerson :: FamTree -> Maybe FTZipper -> Maybe FTZipper
+insertPerson person (Just (Real info links, crumbs)) = Just (Real info (person:links), crumbs)
+insertPerson _ Nothing = Nothing
 
+checkType :: Char -> Maybe FTZipper -> Bool
+checkType pType (Just (Real _ _, _)) = pType == 'r' -- ||
+checkType pType (Just (Temp _, _)) = pType == 't' -- ||
+checkType pType (Just (Hold _ _, _)) = pType == 'h' -- || pType == 'r'
+checkType _ _ = False
 
---prints curr or root of tree
-printRoot :: FamTree a -> FamTree a 
-printRoot Empty = error "need tree to print root"
-printRoot (Node x list) = Node x []
+printFamTree :: Maybe FTZipper -> String
+printFamTree (Just (p@(Real _ ls), _)) = "Father: " ++ (show (last ls)) ++ ", Mother: " ++ (show (last (init ls))) ++ "\n" ++
+                                       (show p) ++ "\n" ++
+                                       "Children: " ++ (printChildren ls)
+printFamTree (Just (p@(Temp _), _)) = (show p)
+printFamTree (Just (p@(Hold _ _), _)) = (show p)
+printFamTree Nothing = ""
 
---prints just name of root 
-printRoot' :: (Show a) => FamTree a -> IO() 
-printRoot' Empty = error "need tree to print root"
-printRoot' (Node x list) = putStrLn(show x)
+printChildren :: [FamTree] -> String
+printChildren (person:ls) = if (length ls) > 1
+                          then (show person) ++ (printChildren ls)
+                          else ""
 
---prints Maybe Node if found in tree
-printFind :: (Eq a) => a -> FamTree a -> Maybe (FamTree a)
-printFind a Empty = Nothing
-printFind a (Node r list)
-    | a == r = Just (Node a [])
-    | a `famElem` list = Just (singleTree a)
-    | otherwise = printFind a x
-    where x | list == [] = Empty | otherwise = head list
+makePerson :: [String] -> [FamTree]
+makePerson (first:ls) = if (length (first:ls)) > 10
+                        then placeGender (Real (Person (first, (head ls)) ' ' (0,0,0) (0,0,0) 0) []) (tail ls)
+                        else error "Not enough info to make a FamTree"
 
---navigate through tree
-changeRoot :: (Eq a) => FamTree a -> FamTree a -> FamTree a
-changeRoot (Node a aList) Empty = error "need tree to navigate" 
---changeRoot (Node a aList) (Node r list) = y
- --  where x = printFind a (Node r list) 
- --        y 
- --        | x == Just (Node a []) = (Node a aList)
- --        | otherwise = Nothing
+placeGender :: FamTree -> [String] -> [FamTree]
+placeGender (Real (Person name _ b d a) rel) (gen:ls) = let gender = head gen
+                                                     in if (gender == 'm') || (gender == 'f')
+                                                        then placeBirth (Real (Person name gender b d a) rel) ls
+                                                        else error "Not correct gender"
 
+placeBirth :: FamTree -> [String] -> [FamTree]
+placeBirth (Real (Person n g _ d a) rel) (bir:ls) = placeDeath (Real (Person n g (calculateDate bir) d a) rel) ls
 
--- number of children of one parent	
-childSize :: (Eq a) => FamTree a -> Int
-childSize Empty = error "cannot calculate children for Empty tree"
-childSize (Node x list) 
-	| list == [] = 0
-	| otherwise = length list
+placeDeath :: FamTree -> [String] -> [FamTree]
+placeDeath (Real (Person n g b _ a) rel) (dea:ls) = [(Real (Person n g b (calculateDate dea) a) rel)] -- ls
 
---number of nodes in tree
--- doesn't go through lists inside list/ doesn't work yet
-famTreeSize :: (Eq a) => FamTree a -> Int
-famTreeSize Empty = 0
-famTreeSize (Node x list) 
-	| list == [] = 1
-	| otherwise = length list + famTreeSize y  -- + every other child in list! 
-	where y | list == [] = Empty | otherwise = head list
+calculateDate :: String -> (Int,Int,Int)
+calculateDate date = (0,0,0)
 
-	
---test variables
-a = Node "Ann" []
-b = singleTree (Individual "Ann" "Kale" 'f' [1,10,1970] [1,10,2000] 30)
-c = Individual "Ann" "Whale" 'f' [2,20,1980] [5,20,1981] 1
-d = Individual "person" "Whal" 'm' [0,0,0000] [1,1,1111] 70
-sample = Node "Will" [Node "Willow" [], Node "Jaden" [Node "Child" [Node "Dude" []]]]
+splitDate :: String -> [String]
+splitDate [] = [""]
+splitDate (x:xs)
+    | isDigit x = (x : head mid) : tail mid
+    | otherwise = "": mid
+    where
+        mid = splitDate xs
+
+--ftParrent
+--ftChild
+
+x -: f = f x 
+
+testTree :: FamTree
+testTree = 
+    Real (Person ("Chris", "Peck") 'm' (03,28,1994) (0,0,0) 21)
+        [ Real (Person ("Judith", "Peck") 'f' (8,9,0) (1,2,3) 4)
+            [ Temp ("Mary", "Mauck")
+            , Temp ("Andrew", "Mauck")
+            ]
+        , Real (Person ("Charlie", "Peck") 'm' (1,2,3) (4,5,6) 7) 
+            [ Hold ("Chris", "Peck") []
+            , Temp ("Larraine", "Peck")
+            , Temp ("Charles", "Peck")
+            ]
+        ]
