@@ -2,12 +2,25 @@
 -- famtree.hs
 --
 
+module FamTree
+( ftUp
+, ftTo --make new one that deals with Holds
+, ftSearch
+, makeTree
+, FTZipper
+, printFamTree
+) where
+
 import Data.Maybe
 import Data.Char
+import Data.Time.Clock
+import Data.Time.Calendar
+import System.IO
 
 type First  = String
 type Last   = String
 type Gender = Char
+type Date   = (Int, Int, Int)
 type Birth  = (Int, Int, Int)
 type Death  = (Int, Int, Int)
 type Age    = Int
@@ -21,23 +34,25 @@ data Info = Person Name Gender Birth Death Age deriving (Show, Read, Eq)
 data FamTree = Real Info [FamTree]
              | Temp Name --[FamTree] add if needed
              | Hold Name [Name] --FTCrumb? or list of names?
+             | Empty
   deriving (Read, Eq)
 
 instance Show FamTree where
     show (Real (Person (first, last) gen (bm,bd,by) (dm,dd,dy) age) _) = first ++ " " ++ last ++ " " ++ show gen ++ " age: " ++ show age
     show (Temp (first, last)) = first ++ " " ++ last
     show (Hold (first, last) _) = first ++ " " ++ last
+    show Empty = "Empty"
 
 -- left: previous nodes info, right: path back up
-data FTCrumb = FTCrumb Info [FamTree] [FamTree]-- deriving (Show)
+data FTCrumb = FTCrumb Info [FamTree] [FamTree] deriving (Show)
 
 type FTZipper = (FamTree, [FTCrumb])
 
 --instance Show FTZipper where
 --    show (_, _) = "hello"
 
-ftUp :: FTZipper -> FTZipper
-ftUp (famTree, FTCrumb name prev crumb:crumbs) = (Real name (prev ++ [famTree] ++ crumb), crumbs)
+ftUp :: Maybe FTZipper -> Maybe FTZipper
+ftUp (Just (famTree, FTCrumb name prev crumb:crumbs)) = (Just (Real name (prev ++ [famTree] ++ crumb), crumbs))
 --ftUP Nothing = Nothing
 
 ftTo :: Name -> Maybe FTZipper -> Maybe (FTZipper)
@@ -116,9 +131,9 @@ insertPerson person (Just (Real info links, crumbs)) = Just (Real info (person:l
 insertPerson _ Nothing = Nothing
 
 checkType :: Char -> Maybe FTZipper -> Bool
-checkType pType (Just (Real _ _, _)) = pType == 'r' -- ||
-checkType pType (Just (Temp _, _)) = pType == 't' -- ||
-checkType pType (Just (Hold _ _, _)) = pType == 'h' -- || pType == 'r'
+checkType pType (Just (Real _ _, _)) = (pType == 'r') || (pType == 'a')
+checkType pType (Just (Temp _, _)) = (pType == 't') -- ||
+checkType pType (Just (Hold _ _, _)) = (pType == 'h') || (pType == 'r') || (pType == 'a')
 checkType _ _ = False
 
 printFamTree :: Maybe FTZipper -> String
@@ -127,32 +142,52 @@ printFamTree (Just (p@(Real _ ls), _)) = "Father: " ++ (show (last ls)) ++ ", Mo
                                        "Children: " ++ (printChildren ls)
 printFamTree (Just (p@(Temp _), _)) = (show p)
 printFamTree (Just (p@(Hold _ _), _)) = (show p)
-printFamTree Nothing = ""
+printFamTree (Just (Empty, _)) = "Empty"
+printFamTree Nothing = "Nothing"
 
 printChildren :: [FamTree] -> String
 printChildren (person:ls) = if (length ls) > 1
                           then (show person) ++ (printChildren ls)
                           else ""
 
-makePerson :: [String] -> [FamTree]
-makePerson (first:ls) = if (length (first:ls)) > 10
-                        then placeGender (Real (Person (first, (head ls)) ' ' (0,0,0) (0,0,0) 0) []) (tail ls)
-                        else error "Not enough info to make a FamTree"
+makePerson :: [String] -> Date -> [FamTree]
+makePerson (first:ls) da = if (length (first:ls)) > 10
+                           then placeGender (Real (Person (first, (head ls)) ' ' (0,0,0) (0,0,0) 0) []) (tail ls) da
+                           else []
 
-placeGender :: FamTree -> [String] -> [FamTree]
-placeGender (Real (Person name _ b d a) rel) (gen:ls) = let gender = head gen
-                                                     in if (gender == 'm') || (gender == 'f')
-                                                        then placeBirth (Real (Person name gender b d a) rel) ls
-                                                        else error "Not correct gender"
+placeGender :: FamTree -> [String] -> Date -> [FamTree]
+placeGender (Real (Person name _ b d a) rel) (gen:ls) da = let gender = toLower (head gen)
+                                                           in if (gender == 'm') || (gender == 'f')
+                                                              then placeBirthDeath (Real (Person name gender b d a) rel) ls da
+                                                              else error "Not correct gender"
 
-placeBirth :: FamTree -> [String] -> [FamTree]
-placeBirth (Real (Person n g _ d a) rel) (bir:ls) = placeDeath (Real (Person n g (calculateDate bir) d a) rel) ls
+placeBirthDeath :: FamTree -> [String] -> Date -> [FamTree]
+placeBirthDeath (Real (Person n g _ d a) rel) (bir:(dea:ls)) da = placeAgeRelatives (Real (Person n g (calcDate bir) (calcDate dea) a) rel) ls da
 
-placeDeath :: FamTree -> [String] -> [FamTree]
-placeDeath (Real (Person n g b _ a) rel) (dea:ls) = [(Real (Person n g b (calculateDate dea) a) rel)] -- ls
+placeAgeRelatives :: FamTree -> [String] -> Date -> [FamTree]
+placeAgeRelatives (Real (Person n g b d a) rel) ls da = (Real (Person n g b d (calcAge b d da)) rel):(makeRelatives ls)
 
-calculateDate :: String -> (Int,Int,Int)
-calculateDate date = (0,0,0)
+makeRelatives :: [String] -> [FamTree]
+makeRelatives (ffn:(fln:(mfn:(mln:ls)))) = (makeChildren ls) ++ [(Temp (mfn,mln)), (Temp(ffn,fln))]
+
+makeChildren :: [String] -> [FamTree]
+makeChildren ("end":ls) = []
+makeChildren (child:ls) = let name = break (==' ') child
+                        in  (Temp name) : (makeChildren ls)
+
+calcAge :: Date -> Date -> Date -> Int
+calcAge (0,0,0) _ _ = 0
+calcAge (bm, bd, by) (0,0,0) (cm, cd, cy) = if (bm > cm) || ((bm == cm) && (bd > cd))
+                                            then cy - by - 1
+                                            else cy - by
+calcAge (bm, bd, by) (dm, dd, dy) _ = if (bm > dm) || ((bm == dm) && (bd > dd))
+                                    then dy - by - 1
+                                    else dy - by
+
+calcDate :: String -> Date
+calcDate ""   = (0,0,0)
+calcDate date = let (m:(d:(y:da))) = splitDate date
+                     in ((read m), (read d), (read y))
 
 splitDate :: String -> [String]
 splitDate [] = [""]
@@ -161,6 +196,50 @@ splitDate (x:xs)
     | otherwise = "": mid
     where
         mid = splitDate xs
+
+attachPerson :: [FamTree] -> Maybe FTZipper -> Maybe FTZipper
+attachPerson ((Real info _):ls) (Just (Empty, [])) = Just ((Real info ls, [])) --addrelattives
+attachPerson ((Real info@(Person name _ _ _ _) _):ls) z = let zip@(Just (per, crumbs)) =  ftSearch name 't' (goToRoot z) 
+                                                       in if Data.Maybe.isJust zip
+                                                          then makeHolds name (makeAddress zip) (Just ((Real info (checkTemps ls zip)), crumbs))
+                                                          else zip
+attachPerson [] zip = zip
+
+makeHolds :: Name -> [Name] -> Maybe FTZipper -> Maybe FTZipper
+makeHolds name ls z = let zip@(Just (per, crumbs)) =  ftSearch name 't' (goToRoot z) 
+                      in if Data.Maybe.isJust zip
+                         then makeHolds name ls (Just ((Hold name ls), crumbs))
+                         else zip
+
+checkTemps :: [FamTree] -> Maybe FTZipper -> [FamTree]
+checkTemps [] _ = []
+checkTemps (per@(Temp name):ls) z = let person = ftSearch name 'r' (goToRoot z)
+                                   in if Data.Maybe.isNothing person
+                                      then per:(checkTemps ls z)
+                                      else if checkType 'h' person
+                                           then (Hold name (getAddress person)) : (checkTemps ls z)
+                                           else (Hold name (makeAddress person)) : (checkTemps ls z)
+makeAddress :: Maybe FTZipper -> [Name]
+makeAddress (Just (_, [])) = []
+makeAddress (Just (p@(Real (Person name _ _ _ _) _), FTCrumb n prev crumb:crumbs)) = (makeAddress (Just (Real n (prev ++ [p] ++ crumb), crumbs))) ++ [name]
+
+getAddress :: Maybe FTZipper -> [Name]
+getAddress (Just ((Hold _ ls), _)) = ls
+
+goToRoot :: Maybe FTZipper -> Maybe FTZipper
+goToRoot Nothing = Nothing
+goToRoot z@(Just (_, [])) = z
+goToRoot z@(Just (_, crumbs)) = goToRoot(ftUp z)
+
+makeEmptyTree :: Maybe FTZipper
+makeEmptyTree = Just (Empty, [])
+
+makeTree :: [[String]] -> Date -> Maybe FTZipper
+makeTree ls date = createTree ls date makeEmptyTree
+
+createTree :: [[String]] -> Date -> Maybe FTZipper -> Maybe FTZipper
+createTree [] _ zip         = zip
+createTree (info:ls) date zip = attachPerson (makePerson info date) zip
 
 --ftParrent
 --ftChild
