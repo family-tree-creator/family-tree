@@ -37,8 +37,8 @@ main = do
        time <- getCurrentTime
        let (y,m,d) = toGregorian $ utctDay time
        let date = (m,d, fromIntegral y) 
-       let tree = makeTree (map splitBySC (splitByLn inpStr)) (m,d, fromIntegral y) 
-       putStrLn (printFamTree tree)
+       let tree = goToRoot (makeTree (map splitBySC (splitByLn inpStr)) (m,d, fromIntegral y))
+       putStrLn ("\n" ++ (printFamTree tree) ++ "\n")
        commands tree
        hClose inh
 
@@ -58,27 +58,34 @@ splitBy c (x:xs)
         
 checkCommand :: [String] -> Bool
 checkCommand ("moveTo":ls) = (length ls) == 2
+checkCommand ("to":ls)     = (length ls) == 2
 checkCommand ("end":ls)    = True
 checkCommand _             = False
 
 executeCommand :: [String] -> Maybe FTZipper -> Maybe FTZipper
-executeCommand  ("moveTo":ls) tree = let result = ftSearch (head ls, head(tail ls)) 'a' tree
+executeCommand  ("moveTo":ls) tree = let result = ftSearch (head ls, head(tail ls)) 'a' (goToRoot tree)
                                      in if Data.Maybe.isJust result
                                         then result
                                         else error ((show ls) ++ ": is not a person")
+executeCommand ("to":ls) tree = let result = ftTo (head ls, head(tail ls)) tree
+                                in if Data.Maybe.isJust result
+                                   then result
+                                   else error ((show(head ls, head(tail ls))) ++ ": is not a person")
+
 commands :: Maybe FTZipper -> IO ()
-commands tree = do putStr "comand: "
+commands tree = do putStr "command: "
                    l <- getLine
                    --putStrLn l
                    let (comm:ls) = splitBy ' ' l
                    --putStrLn $ show (checkCommand (comm:ls))
+                   --putStrLn $ show (goToRoot tree)
                    if checkCommand (comm:ls)
                    then if comm == "end"
                         then putStrLn "goodbye"
                         else let newTree = executeCommand (comm:ls) tree
-                             in do putStrLn (printFamTree newTree)
+                             in do putStrLn ("\n" ++ (printFamTree newTree) ++ "\n")
                                    commands newTree
-                   else do putStrLn (l ++ ": is to a correct command")
+                   else do putStrLn (l ++ ": is an incorrect command\n")
                            commands tree
 
 {-check comm 

@@ -9,6 +9,7 @@ module FamTree
 , makeTree
 , FTZipper
 , printFamTree
+, goToRoot
 ) where
 
 import Data.Maybe
@@ -88,7 +89,7 @@ ftSearch _ _ _ = Nothing
 
 ftSearchR :: Name -> Char -> Maybe FTZipper -> Maybe FTZipper --may be able to remove in later fix
 ftSearchR name pType p@(Just (Real info links, crumbs)) = --Just (p)
-    let r =  ftTo name p
+    let r = ftTo name p
     in if (Data.Maybe.isJust r) && (checkType pType r)
        then r
        else ftSearchN name pType p 0-- map to links?
@@ -132,7 +133,7 @@ insertPerson _ Nothing = Nothing
 
 checkType :: Char -> Maybe FTZipper -> Bool
 checkType pType (Just (Real _ _, _)) = (pType == 'r') || (pType == 'a')
-checkType pType (Just (Temp _, _)) = (pType == 't') -- ||
+checkType pType (Just (Temp _, _))   = (pType == 't') || (pType == 'a')
 checkType pType (Just (Hold _ _, _)) = (pType == 'h') || (pType == 'r') || (pType == 'a')
 checkType _ _ = False
 
@@ -199,26 +200,29 @@ splitDate (x:xs)
 
 attachPerson :: [FamTree] -> Maybe FTZipper -> Maybe FTZipper
 attachPerson ((Real info _):ls) (Just (Empty, [])) = Just ((Real info ls, [])) --addrelattives
-attachPerson ((Real info@(Person name _ _ _ _) _):ls) z = let zip@(Just (per, crumbs)) =  ftSearch name 't' (goToRoot z) 
-                                                       in if Data.Maybe.isJust zip
-                                                          then makeHolds name (makeAddress zip) (Just ((Real info (checkTemps ls zip)), crumbs))
-                                                          else zip
+attachPerson ((Real info@(Person name _ _ _ _) _):ls) z = let zip =  ftSearch name 't' (goToRoot z) 
+                                                          in if Data.Maybe.isJust zip
+                                                             then let (Just (per, crumbs)) = zip
+                                                                  in makeHolds name (makeAddress zip) (Just ((Real info (checkTemps ls zip)), crumbs))
+                                                              else z
 attachPerson [] zip = zip
 
 makeHolds :: Name -> [Name] -> Maybe FTZipper -> Maybe FTZipper
-makeHolds name ls z = let zip@(Just (per, crumbs)) =  ftSearch name 't' (goToRoot z) 
+makeHolds name ls z = let zip =  ftSearch name 't' (goToRoot z) 
                       in if Data.Maybe.isJust zip
-                         then makeHolds name ls (Just ((Hold name ls), crumbs))
-                         else zip
+                         then let (Just (per, crumbs)) = zip
+                              in makeHolds name ls (Just ((Hold name ls), crumbs))
+                         else z
+
 
 checkTemps :: [FamTree] -> Maybe FTZipper -> [FamTree]
 checkTemps [] _ = []
 checkTemps (per@(Temp name):ls) z = let person = ftSearch name 'r' (goToRoot z)
-                                   in if Data.Maybe.isNothing person
-                                      then per:(checkTemps ls z)
-                                      else if checkType 'h' person
-                                           then (Hold name (getAddress person)) : (checkTemps ls z)
-                                           else (Hold name (makeAddress person)) : (checkTemps ls z)
+                                    in if Data.Maybe.isNothing person
+                                       then per:(checkTemps ls z)
+                                       else if checkType 'h' person
+                                            then (Hold name (getAddress person)) : (checkTemps ls z)
+                                            else (Hold name (makeAddress person)) : (checkTemps ls z)
 makeAddress :: Maybe FTZipper -> [Name]
 makeAddress (Just (_, [])) = []
 makeAddress (Just (p@(Real (Person name _ _ _ _) _), FTCrumb n prev crumb:crumbs)) = (makeAddress (Just (Real n (prev ++ [p] ++ crumb), crumbs))) ++ [name]
@@ -238,8 +242,9 @@ makeTree :: [[String]] -> Date -> Maybe FTZipper
 makeTree ls date = createTree ls date makeEmptyTree
 
 createTree :: [[String]] -> Date -> Maybe FTZipper -> Maybe FTZipper
-createTree [] _ zip         = zip
-createTree (info:ls) date zip = attachPerson (makePerson info date) zip
+createTree [] _ zip           = zip
+createTree (info:ls) date zip = let result = attachPerson (makePerson info date) zip
+                                in createTree ls date result
 
 --ftParrent
 --ftChild
