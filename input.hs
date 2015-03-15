@@ -1,4 +1,4 @@
---runghc input.hs will take test1.txt and create output file
+--input.hs will take a formated text file and produce a family tree
 
 import System.IO
 import Data.Char
@@ -7,18 +7,8 @@ import Data.Time
 import FamTree
 import Data.Maybe
 
---input functions
---look: looks at nodes info
---father: make father curr
---mother: makes mother curr
---child (Int): makes child # curr
---child (String,String): makes child (S,S) curr
---nextChildren: displays next set of children if they exist
---prevChildren: displays prev set of children if they exist
---help: displays list of functions with discription
---end: stops program
---display: displays tree again
 
+-- main function: asks for the file to be processed
 main :: IO ()
 main = do 
        putStr "What file do you want to input: "
@@ -42,12 +32,15 @@ main = do
        commands tree
        hClose inh
 
+--splits a string into a list of strings by the newline character
 splitByLn :: String -> [String]
 splitByLn = splitBy '\n'
 
+--splits a string into a list of strings by the semicolon character
 splitBySC :: String -> [String]
 splitBySC = splitBy ';'
 
+--splits a string into a list of strings by the character held by c
 splitBy :: Char -> String -> [String]
 splitBy _ "" = [""]
 splitBy c (x:xs)
@@ -55,23 +48,27 @@ splitBy c (x:xs)
     | otherwise = (x : head mid) : tail mid
     where
         mid = splitBy c xs
-        
+
+--checks of command enterd exists
 checkCommand :: [String] -> Bool
 checkCommand ("moveTo":ls) = (length ls) == 2
-checkCommand ("to":ls)     = (length ls) == 2
+--checkCommand ("to":ls)     = (length ls) == 2
 checkCommand ("end":ls)    = True
 checkCommand _             = False
 
+--translates string into command and executes
 executeCommand :: [String] -> Maybe FTZipper -> Maybe FTZipper
 executeCommand  ("moveTo":ls) tree = let result = ftSearch (head ls, head(tail ls)) 'a' (goToRoot tree)
                                      in if Data.Maybe.isJust result
                                         then result
                                         else error ((show ls) ++ ": is not a person")
-executeCommand ("to":ls) tree = let result = ftTo (head ls, head(tail ls)) tree
+{-executeCommand ("to":ls) tree = let result = ftTo (head ls, head(tail ls)) tree
                                 in if Data.Maybe.isJust result
                                    then result
                                    else error ((show(head ls, head(tail ls))) ++ ": is not a person")
+-}
 
+--takes in a command and executes
 commands :: Maybe FTZipper -> IO ()
 commands tree = do putStr "command: "
                    l <- getLine
@@ -87,15 +84,3 @@ commands tree = do putStr "command: "
                                    commands newTree
                    else do putStrLn (l ++ ": is an incorrect command\n")
                            commands tree
-
-{-check comm 
-    | comm == "end" = putStrLn goodbye
-    | comm == "display" = display
-    | otherwise wrong commm
-    
---display = 
-  
-wrong comm  
-    putStrLn comm ++ " is not a correct command" 
-                commands
--}
